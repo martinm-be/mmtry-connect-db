@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use clap::Parser;
+use exec::Command;
 use serde::Deserialize;
-use std::fs;
-use std::process::Command;
+use std::{env, fs};
 
 #[derive(Parser, Debug)]
 #[command(name = "connect-db")]
@@ -133,17 +133,16 @@ fn connect_with_psql(params: &ConnectionParams) -> Result<()> {
         .arg(&params.database);
 
     // Set PGPASSWORD environment variable
-    cmd.env("PGPASSWORD", &params.password);
-
-    let status = cmd
-        .status()
-        .with_context(|| "Failed to execute psql command")?;
-
-    if !status.success() {
-        return Err(anyhow::anyhow!("psql exited with non-zero status"));
+    unsafe {
+        env::set_var("PGPASSWORD", &params.password);
     }
 
-    Ok(())
+    // This will replace the current process with psql
+    // If successful, this function will never return
+    let err = cmd.exec();
+
+    // If we reach this point, exec failed
+    Err(anyhow::anyhow!("Failed to exec psql: {}", err))
 }
 
 fn main() -> Result<()> {
